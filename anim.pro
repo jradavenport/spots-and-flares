@@ -86,17 +86,15 @@ pro anim, followspot=followspot
         ; FOR FOLLOWSPOT FLARES:
         ;  - use gaussian kernel in lat and lon around spot(s)
         IF KEYWORD_SET(followspot) THEN BEGIN
+            ; pick a random spot to put flare near
+            x = floor(randomu(sss,1) * (n_elements(lon) + 1))
+            ; put flare near spot
+            flare_lon = lon[x] + randomn(sss, 1) * rad[x]*90.
+            flare_lat = lat[x] + randomn(sss, 1) * rad[x]*90.
 
-
-            ; find which spots are in view, if none, no flare added
-            sok = where(abs((360-i) - lon) LT (90. + rad*90.)); or $
-                        ; abs(-i - (lon-360) LT 90.))
-            if sok[0] ne -1 then begin
-                ; if there are OK spots, then pick one randomly
-                x = floor(randomu(sss,1) * (n_elements(sok) + 1))
-                flare_lon = lon[sok[x]] + randomn(sss, 1) * rad[sok[x]]*90.
-                flare_lat = lat[sok[x]] + randomn(sss, 1) * rad[sok[x]]*90.
-
+            ; find if flare is within view (even if spot is not quite yet)
+            sok = (abs((360-i) - flare_lon) LT 90.)
+            if sok[0] ne 0 then begin
                 ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
                 flare_params = [[flare_params], [ptmp]]
 
@@ -146,7 +144,7 @@ pro anim, followspot=followspot
 
   set_plot,'X'
 
-  spawn,'ffmpeg -r 24 -i img/frame%05d.jpeg -pix_fmt yuv420p -r 24 -qscale 1 test.mp4'
+  spawn,'ffmpeg -r 20 -i img/frame%05d.jpeg -pix_fmt yuv420p -r 20 -qscale 1 test.mp4'
 
 
   stop
