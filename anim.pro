@@ -9,10 +9,10 @@ pro anim, followspot=followspot
 
   ; flare rate is a number between 0-1. gives the acceptance rate for
   ; randomly generating a new flare per frame
-  flare_rate = 0.2
-
+  flare_rate = 0.5
+  
   ; read the starspot VIZ outputs from STSP
-  stsp_prefix = 'spot_v3'
+  stsp_prefix = 'spot_v2'
   readcol, stsp_prefix + '.in', inraw, f='(F)', /silent
   if inraw[0] eq 0 then $ ; if no planets
      nspots = inraw[8]
