@@ -10,7 +10,7 @@ pro anim, followspot=followspot
   ; flare rate is a number between 0-1. gives the acceptance rate for
   ; randomly generating a new flare per frame
   flare_rate = 0.5
-  
+
   ; read the starspot VIZ outputs from STSP
   stsp_prefix = 'spot_v2'
   readcol, stsp_prefix + '.in', inraw, f='(F)', /silent
@@ -23,7 +23,7 @@ pro anim, followspot=followspot
   ; read the spot positions from the .in file
   rad = inraw[n_elements(inraw) - (findgen(nspots)*3.+4.)]
   lat = inraw[n_elements(inraw) - (findgen(nspots)*3.+3.)]/!dpi*180.-90.
-  lon = 360 - inraw[n_elements(inraw) - (findgen(nspots)*3.+2.)]/!dpi*180.
+  lon = inraw[n_elements(inraw) - (findgen(nspots)*3.+2.)]/!dpi*180.
 
 
   nframes = 360 ; use this also as the rotation period
@@ -69,12 +69,14 @@ pro anim, followspot=followspot
         ampl = Eng ;0.002
 
         ; flare position properties...
-        ; FOR RANDOM FLARES:
-        ;  - randomly within observed lon range
-        ;  - gaussian lat range within equatorial band
         IF NOT KEYWORD_SET(followspot) THEN BEGIN
-            flare_lon = -i + randomu(sss, 1)*180.-90.
-            flare_lat = randomn(sss,1)*20.
+            ; FOR RANDOM FLARES:
+            ;  - randomly within observed lon range
+            flare_lon = -i + randomu(sss, 1) * 180. - 90.
+            ;  - gaussian lat range within equatorial band
+            ; flare_lat = randomn(sss,1)*20.
+            ;  - random latitudes on whole surface
+            flare_lat = randomu(sss,1) * 180. - 90.
 
             ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
             flare_params = [[flare_params], [ptmp]]
