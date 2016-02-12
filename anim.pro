@@ -7,12 +7,32 @@ pro anim, followspot=followspot
   ;   while simultaneously a real light curve is being generated
   ; - do few versions with different spot configurations
 
+
+  stsp_prefix = 'polarspot'
+
   ; flare rate is a number between 0-1. gives the acceptance rate for
   ; randomly generating a new flare per frame
-  flare_rate = 0.5
+  flare_rate = 0. ; set to 0 for NO flares
+
+  nframes = 360 ; use this also as the rotation period
+  extra_rot = 5 ; number of extra rotations to generate data over
+
+  incl = 12 ; stellar inclination
+  rot = 24 ; rotation (position) angle. no reason, just looks cool
+
+  Emin = 0.001 ; min flare energy
+  Emax = 0.1 ; max flare energy
+
+  followspot_out = 'no'
+  if KEYWORD_SET(followspot) then $
+    followspot_out = 'yes'
+
+  ; make flares around the equator
+  eqband = 'no'
+  eqrange = 20. ; if "yes", this is the latitude band width
+
 
   ; read the starspot VIZ outputs from STSP
-  stsp_prefix = 'spot_v2'
   readcol, stsp_prefix + '.in', inraw, f='(F)', /silent
   if inraw[0] eq 0 then $ ; if no planets
      nspots = inraw[8]
@@ -25,17 +45,11 @@ pro anim, followspot=followspot
   lat = inraw[n_elements(inraw) - (findgen(nspots)*3.+3.)]/!dpi*180.-90.
   lon = inraw[n_elements(inraw) - (findgen(nspots)*3.+2.)]/!dpi*180.
 
-
-  nframes = 360 ; use this also as the rotation period
-  incl = 12 ; stellar inclination
-  rot = 24 ; rotation (position) angle. no reason, just looks cool
-
   ; hold the flare parameters:
   ; [tpeak, fwhm, ampl, t_created, lon, lat]
   flare_params = [-1, -1, -1, -1, -1, -1]
   ; flares are tracked from -1 FWHM to 10 FWHM
   fwhm_max = 10.
-
 
   set_plot,'ps'
 
@@ -56,16 +70,16 @@ pro anim, followspot=followspot
         polyfill, xxc, yyc, color=90
      endfor
 
-
      ; draw the flares
      loadct, 39, /silent
 
      ; should we make a new flare?
      new_fl_p = randomu(sss,1)
      if new_fl_p le flare_rate then begin
-        Eng = randomp(sss, 1, -1, min=0.001, max=0.1)
+        ; use random powerlaw to draw flare energy
+        Eng = randomp(sss, 1, -1, min=Emin, max=Emax)
 
-        fwhm = alog10(Eng)+4 ; replace these w/ probabilities later
+        fwhm = alog10(Eng)+4. ; replace these w/ probabilities later
         ampl = Eng ;0.002
 
         ; flare position properties...
@@ -73,10 +87,14 @@ pro anim, followspot=followspot
             ; FOR RANDOM FLARES:
             ;  - randomly within observed lon range
             flare_lon = -i + randomu(sss, 1) * 180. - 90.
+
             ;  - gaussian lat range within equatorial band
-            ; flare_lat = randomn(sss,1)*20.
+            if eqband eq 'yes' then $
+                flare_lat = randomn(sss,1) * eqrange
+
             ;  - random latitudes on whole surface
-            flare_lat = randomu(sss,1) * 180. - 90.
+            if eqband eq 'no' then $
+                flare_lat = randomu(sss,1) * 180. - 90.
 
             ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
             flare_params = [[flare_params], [ptmp]]
@@ -91,8 +109,8 @@ pro anim, followspot=followspot
             ; pick a random spot to put flare near
             x = floor(randomu(sss,1) * (n_elements(lon) + 1))
             ; put flare near spot
-            flare_lon = lon[x] + randomn(sss, 1) * rad[x]*90.
-            flare_lat = lat[x] + randomn(sss, 1) * rad[x]*90.
+            flare_lon = lon[x] + randomn(sss, 1) * rad[x];*90.
+            flare_lat = lat[x] + randomn(sss, 1) * rad[x];*90.
 
             ; find if flare is within view (even if spot is not quite yet)
             sok = (abs((360-i) - flare_lon) LT 90.)
@@ -138,7 +156,7 @@ pro anim, followspot=followspot
            xrange=[0,nframes], yrange=yrng
 
      device,/close
-     spawn,'convert -density 150x150 -flatten img/frame'+$
+     spawn,'convert -density 150x150 -flatten img/frame' + $
            string(i,f='(I05)')+'.eps img/frame'+string(i,f='(I05)')+'.jpeg'
      spawn, 'rm img/*.eps'
 
@@ -146,7 +164,30 @@ pro anim, followspot=followspot
 
   set_plot,'X'
 
-  spawn,'ffmpeg -r 20 -i img/frame%05d.jpeg -pix_fmt yuv420p -r 20 -qscale 1 test.mp4'
+  ;-- generate a LOG FILE to save params used
+  openw, 1, stsp_prefix + '_animparams.txt'
+  printf, 1, 'Created on ' + systime()
+  printf, 1, '  using these parameters:'
+
+  printf, 1, 'stsp_prefix = ' + stsp_prefix
+  printf, 1, 'flare_rate = ' + flare_rate
+  printf, 1, 'nframes = ' + nframes
+  printf, 1, 'extra_rot = ' + extra_rot
+  printf, 1, 'incl = ' + incl
+  printf, 1, 'rot = ' + rot
+  printf, 1, 'Emin = ' + Emin
+  printf, 1, 'Emax = ' + Emax
+  printf, 1, 'followspot = ' + followspot_out
+  printf, 1, 'eqband = ' + eqband
+  printf, 1, 'eqrange = ' + eqrange
+  ; printf, 1, '' +
+  close, 1
+
+
+  ; render movie
+  spawn,'ffmpeg -r 20 -i img/frame%05d.jpeg -pix_fmt yuv420p -r 20 -qscale 1 ' + $
+    stsp_prefix + '.mp4'
+
 
 
   stop
@@ -155,16 +196,18 @@ end
 
 
 pro spotgen, nspots, maxrad=maxrad
-  if not keyword_set(maxrad) then $
-     maxrad = 0.1
-  if not keyword_set(nspots) then $
+    ; a short helper script to generate random spot sizes/positions
+    ; use to copy/paste into STSP input file
+
+    if not keyword_set(maxrad) then $
+        maxrad = 0.1
+    if not keyword_set(nspots) then $
      nspots = 5
 
-  lon = randomu(sss,nspots)*2.*!dpi
-  lat = randomn(sss,nspots)*(!dpi/2.)/5. + !dpi/2.
-  rad = randomu(sss,nspots)*maxrad
+    lon = randomu(sss,nspots)*2.*!dpi
+    lat = randomn(sss,nspots)*(!dpi/2.)/5. + !dpi/2.
+    rad = randomu(sss,nspots)*maxrad
 
-  for i=0l,nspots-1 do print,rad[i],lat[i],lon[i],f='(F5.3)'
-
-  return
+    for i=0l,nspots-1 do print,rad[i],lat[i],lon[i],f='(F5.3)'
+    return
 end
