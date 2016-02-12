@@ -12,7 +12,7 @@ pro anim, followspot=followspot
 
   ; flare rate is a number between 0-1. gives the acceptance rate for
   ; randomly generating a new flare per frame
-  flare_rate = 0. ; set to 0 for NO flares
+  flare_rate = 0.25 ; set to 0 for NO flares
 
   nframes = 360 ; use this also as the rotation period
   extra_rot = 5 ; number of extra rotations to generate data over
@@ -20,8 +20,8 @@ pro anim, followspot=followspot
   incl = 12 ; stellar inclination
   rot = 24 ; rotation (position) angle. no reason, just looks cool
 
-  Emin = 0.001 ; min flare energy
-  Emax = 0.1 ; max flare energy
+  Emin = 0.0005 ; min flare energy
+  Emax = 0.01 ; max flare energy
 
   followspot_out = 'no'
   if KEYWORD_SET(followspot) then $
@@ -169,17 +169,17 @@ pro anim, followspot=followspot
   printf, 1, 'Created on ' + systime()
   printf, 1, '  using these parameters:'
 
-  printf, 1, 'stsp_prefix = ' + stsp_prefix
-  printf, 1, 'flare_rate = ' + flare_rate
-  printf, 1, 'nframes = ' + nframes
-  printf, 1, 'extra_rot = ' + extra_rot
-  printf, 1, 'incl = ' + incl
-  printf, 1, 'rot = ' + rot
-  printf, 1, 'Emin = ' + Emin
-  printf, 1, 'Emax = ' + Emax
-  printf, 1, 'followspot = ' + followspot_out
-  printf, 1, 'eqband = ' + eqband
-  printf, 1, 'eqrange = ' + eqrange
+  printf, 1, 'stsp_prefix = ' + string(stsp_prefix)
+  printf, 1, 'flare_rate = ' + string(flare_rate)
+  printf, 1, 'nframes = ' + string(nframes)
+  printf, 1, 'extra_rot = ' + string(extra_rot)
+  printf, 1, 'incl = ' + string(incl)
+  printf, 1, 'rot = ' + string(rot)
+  printf, 1, 'Emin = ' + string(Emin)
+  printf, 1, 'Emax = ' + string(Emax)
+  printf, 1, 'followspot = ' + string(followspot_out)
+  printf, 1, 'eqband = ' + string(eqband)
+  printf, 1, 'eqrange = ' + string(eqrange)
   ; printf, 1, '' +
   close, 1
 
