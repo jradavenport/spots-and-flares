@@ -1,4 +1,4 @@
-pro anim
+pro anim, noplot=noplot
 set_plot,'X'
 plotstuff,/set,/silent
 
@@ -20,8 +20,9 @@ extra_rot = 10 ; number of extra rotations to generate data over
 incl = 12 ; stellar inclination
 rot = 24 ; rotation (position) angle. no reason, just looks cool
 
+Eslope = -2.0 ; powerlaw slope
 Emin = 0.0005 ; min flare energy
-Emax = 0.005 ; max flare energy
+Emax = 0.01 ; max flare energy
 
 followspot = 1
 
@@ -61,8 +62,15 @@ fwhm_max = 10.
 
 set_plot,'ps'
 FL_out = [-1]
+
+; set the max number of frames to actually plot (default is, of course Nframes)
+nframes_max = nframes
+; unless we want to plot NONE...
+if KEYWORD_SET(noplot) then $
+    nframes_max = -1
+
 FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
-    if i LT nframes then begin
+    if i LT nframes_max then begin
         device, filename='img/frame'+string(i,f='(I05)')+'.eps',$
             /encap,/inch,/color,xsize=6,ysize=8
 
@@ -77,7 +85,7 @@ FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
     ; draw the spots
     for k=0,nspots-1 do begin
     drawcircle, lon[k], lat[k], rad[k], xxc, yyc
-    if i LT nframes then $
+    if i LT nframes_max then $
         polyfill, xxc, yyc, color=90
     endfor
 
@@ -88,7 +96,7 @@ FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
      new_fl_p = randomu(sss,1)
      if new_fl_p le flare_rate then begin
         ; use random powerlaw to draw flare energy
-        Eng = randomp(sss, 1, -1, min=Emin, max=Emax)
+        Eng = RANDOMP(sss, 1, Eslope, min=Emin, max=Emax)
 
         fwhm = alog10(Eng)+4. ; replace these w/ probabilities later
         ampl = Eng ;0.002
@@ -149,7 +157,7 @@ FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
         flare_params = tmp
      endif
 
-    if i LT nframes then begin
+    if i LT nframes_max then begin
          if (n_elements(flare_params)/6.) gt 1 then begin
          ;oplot, flare_lon, flare_lat, psym=4, color=250
             for k=1l,(n_elements(flare_params)/6.)-1 do begin
@@ -191,6 +199,7 @@ printf, 1, 'nframes = ' + string(nframes)
 printf, 1, 'extra_rot = ' + string(extra_rot)
 printf, 1, 'incl = ' + string(incl)
 printf, 1, 'rot = ' + string(rot)
+printf, 1, 'Eslope = ' + string(Eslope)
 printf, 1, 'Emin = ' + string(Emin)
 printf, 1, 'Emax = ' + string(Emax)
 printf, 1, 'followspot = ' + string(followspot_out)
@@ -200,9 +209,11 @@ printf, 1, 'eqrange = ' + string(eqrange)
 close, 1
 
 
-; render movie
-spawn,'ffmpeg -i img/frame%05d.jpeg -pix_fmt yuv420p -r 30 -qscale 1 ' + $
-    stsp_prefix + '.mp4'
+if not KEYWORD_SET(noplot) then begin
+    ; render movie
+    spawn,'ffmpeg -i img/frame%05d.jpeg -pix_fmt yuv420p -r 30 -qscale 1 ' + $
+        stsp_prefix + '.mp4'
+endif
 
 loadct,0,/silent
 
