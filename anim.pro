@@ -1,4 +1,4 @@
-pro anim, followspot=followspot
+pro anim
   set_plot,'X'
   plotstuff,/set,/silent
 
@@ -12,7 +12,7 @@ pro anim, followspot=followspot
 
   ; flare rate is a number between 0-1. gives the acceptance rate for
   ; randomly generating a new flare per frame
-  flare_rate = 0.25 ; set to 0 for NO flares
+  flare_rate = 0.2 ; set to 0 for NO flares
 
   nframes = 360 ; use this also as the rotation period
   extra_rot = 5 ; number of extra rotations to generate data over
@@ -21,11 +21,9 @@ pro anim, followspot=followspot
   rot = 24 ; rotation (position) angle. no reason, just looks cool
 
   Emin = 0.0005 ; min flare energy
-  Emax = 0.01 ; max flare energy
+  Emax = 0.005 ; max flare energy
 
-  followspot_out = 'no'
-  if KEYWORD_SET(followspot) then $
-    followspot_out = 'yes'
+  followspot = 1
 
   ; make flares around the equator
   eqband = 'no'
@@ -108,33 +106,38 @@ pro anim, followspot=followspot
         IF KEYWORD_SET(followspot) THEN BEGIN
             ; pick a random spot to put flare near
             x = floor(randomu(sss,1) * (n_elements(lon) + 1))
-            ; put flare near spot
-            flare_lon = lon[x] + randomn(sss, 1) * rad[x];*90.
-            flare_lat = lat[x] + randomn(sss, 1) * rad[x];*90.
 
-            ; find if flare is within view (even if spot is not quite yet)
-            sok = (abs((360-i) - flare_lon) LT 90.)
-            if sok[0] ne 0 then begin
+            ; find random position for the flare within the spot
+            coord_tmp = flarecircle(lon[x], lat[x], rad[x], sss)
+            flare_lon = coord_tmp[0]
+            flare_lat = coord_tmp[1]
+
+            ; find great circle distance from center of star to flare
+            fdist = map_2points(-i, incl, flare_lon, flare_lat)
+
+            ; if flare not over the horizon, add it
+            if fdist[0] le 90 then begin
+                ;add the flare to the flare properties array
                 ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
                 flare_params = [[flare_params], [ptmp]]
 
-                ; add the flare to the light curve
+                ; then add the flare to the light curve
                 flux = flux + real(aflare(time, ptmp[0:2]),0)
             endif
         ENDIF
-
      endif
+
 
      if (n_elements(flare_params)/6.) gt 1 then begin
         ; look for flares still to be tracked
         x = where(i lt (flare_params[0,1:*] + flare_params[1,1:*] * fwhm_max))
+        tmp = [-1, -1, -1, -1, -1, -1]
         if x[0] ne -1 then begin
-           tmp = [-1, -1, -1, -1, -1, -1]
-           ; remove flares not being tracked
+           ; keep flares still to be tracked
            for k=0,n_elements(x)-1 do $
               tmp = [[tmp], [flare_params[*,x[k]+1]]]
-           flare_params = tmp
         endif
+        flare_params = tmp
      endif
 
      if (n_elements(flare_params)/6.) gt 1 then begin
@@ -164,6 +167,10 @@ pro anim, followspot=followspot
 
   set_plot,'X'
 
+  followspot_out = 'no'
+  if KEYWORD_SET(followspot) then $
+  followspot_out = 'yes'
+
   ;-- generate a LOG FILE to save params used
   openw, 1, stsp_prefix + '_animparams.txt'
   printf, 1, 'Created on ' + systime()
@@ -185,7 +192,7 @@ pro anim, followspot=followspot
 
 
   ; render movie
-  spawn,'ffmpeg -r 20 -i img/frame%05d.jpeg -pix_fmt yuv420p -r 20 -qscale 1 ' + $
+  spawn,'ffmpeg -i img/frame%05d.jpeg -pix_fmt yuv420p -r 30 -qscale 1 ' + $
     stsp_prefix + '.mp4'
 
 
@@ -210,4 +217,89 @@ pro spotgen, nspots, maxrad=maxrad
 
     for i=0l,nspots-1 do print,rad[i],lat[i],lon[i],f='(F5.3)'
     return
+end
+
+
+pro drawcircle, lon_in, lat_in, rad_in,$
+    gl, gb, plot=plot, _Extra=e ;lon_out,lat_out
+  ;-- enter the coords and size of a spot:
+  ;   LON_in, LAT_in, RAD_in
+  ;  -> everything in degrees
+  ;
+  ;-- code "puts" RAD_in circle about the pole, rotates coordinates to
+  ;   place at desired (lat,lon), using math stolen from GLACTC.pro
+
+radeg = 180.0d/!DPI
+rapol = lon_in/15.
+decpol = lat_in
+posang,0,0,!pi,lon_in*!dtor,lat_in*!dtor,dlon ;-- compute position angle
+dlon = 0 ; (dlon/!dtor) mod 180.
+
+gl = fltarr(1000)
+gb = fltarr(1000)
+
+ra = dindgen(1000)/999.*360.  ; make ring of points with RAD_in about pole
+dec= fltarr(1000)*0.+ 90. - asin(rad_in)/!dtor
+
+sdp = sin(decpol/radeg)
+cdp = sqrt(1.0d0-sdp*sdp)
+radhrs=radeg/15.0d0
+
+ras  = ra
+decs = dec
+
+ras = ras/radeg - rapol/radhrs
+sdec = sin(decs/radeg)
+cdec = sqrt(1.0d0-sdec*sdec)
+sgb = sdec*sdp + cdec*cdp*cos(ras)
+gb = radeg * asin(sgb)
+cgb = sqrt(1.0d0-sgb*sgb)
+sine = cdec * sin(ras) / cgb
+cose = (sdec-sdp*sgb) / (cdp*cgb)
+gl = dlon - radeg*atan(sine,cose)+lon_in
+ltzero = where(gl lt 0.0, Nltzero)
+if Nltzero ge 1 then gl[ltzero]=gl[ltzero]+360.0d0
+
+if keyword_set(plot) then oplot,gl,gb, _Extra=e
+return
+end
+
+
+
+function flarecircle, lon_in, lat_in, rad_in, seed
+; using same math as drawcircle, pick a random location within a starspot
+; uniform random in (r,theta) within the starspot
+radeg = 180.0d/!DPI
+rapol = lon_in/15.
+decpol = lat_in
+posang, 0, 0, !pi, lon_in*!dtor, lat_in*!dtor, dlon ;-- compute position angle
+dlon = 0 ; (dlon/!dtor) mod 180.
+
+gl = fltarr(1000)
+gb = fltarr(1000)
+
+rad_rand = randomu(seed,1) * rad_in
+ra = randomU(seed,1)*360.  ; make ring of points with RAD_in about pole
+dec= 90. - asin(rad_rand)/!dtor
+
+sdp = sin(decpol/radeg)
+cdp = sqrt(1.0d0-sdp*sdp)
+radhrs=radeg/15.0d0
+
+ras  = ra
+decs = dec
+
+ras = ras/radeg - rapol/radhrs
+sdec = sin(decs/radeg)
+cdec = sqrt(1.0d0-sdec*sdec)
+sgb = sdec*sdp + cdec*cdp*cos(ras)
+gb = radeg * asin(sgb)
+cgb = sqrt(1.0d0-sgb*sgb)
+sine = cdec * sin(ras) / cgb
+cose = (sdec-sdp*sgb) / (cdp*cgb)
+gl = dlon - radeg*atan(sine,cose)+lon_in
+ltzero = where(gl lt 0.0, Nltzero)
+if Nltzero ge 1 then gl[ltzero]=gl[ltzero]+360.0d0
+
+return, [gl, gb]
 end
