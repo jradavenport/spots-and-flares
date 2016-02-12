@@ -8,14 +8,14 @@ plotstuff,/set,/silent
 ; - do few versions with different spot configurations
 
 
-stsp_prefix = 'polarspot'
+stsp_prefix = 'multispot2'
 
 ; flare rate is a number between 0-1. gives the acceptance rate for
 ; randomly generating a new flare per frame
-flare_rate = 0.15 ; set to 0 for NO flares
+flare_rate = 0.2 ; set to 0 for NO flares
 
 nframes = 360 ; use this also as the rotation period
-extra_rot = 5 ; number of extra rotations to generate data over
+extra_rot = 10 ; number of extra rotations to generate data over
 
 incl = 12 ; stellar inclination
 rot = 24 ; rotation (position) angle. no reason, just looks cool
@@ -28,6 +28,8 @@ followspot = 1
 ; make flares around the equator
 eqband = 'no'
 eqrange = 20. ; if "yes", this is the latitude band width
+
+extraspots = 0. ; number of extra little spots to draw, not included in STSP model (limit usually 10)
 
 
 ; read the starspot VIZ outputs from STSP
@@ -211,7 +213,7 @@ contour_plus, (time mod nframes)/nframes, flux, 1, position=posgen(1,2,2), $
     /pixel,/reverse, xbin=0.01, ybin=(max(flux)-min(flux))/100.
 plothist, (float(fl_out) mod nframes)/nframes,bin=0.05,/half, $
     position=posgen(1,2,1),/noerase, xtickname=replicate(' ',8), $
-    xrange=[0,1], /xsty, ytitle='# Flares', charsize=1,thick=4
+    xrange=[0,1], /xsty, ytitle='# Flares', charsize=1,thick=4,/fill,/fline,forient=45
 device,/close
 
 
@@ -234,6 +236,7 @@ pro spotgen, nspots, maxrad=maxrad
     lat = randomn(sss,nspots)*(!dpi/2.)/5. + !dpi/2.
     rad = randomu(sss,nspots)*maxrad
 
+    print, 'COPY THIS IN TO STSP...'
     for i=0l,nspots-1 do print,rad[i],lat[i],lon[i],f='(F5.3)'
     return
 end
