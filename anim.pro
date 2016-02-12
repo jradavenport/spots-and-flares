@@ -1,75 +1,86 @@
 pro anim
-  set_plot,'X'
-  plotstuff,/set,/silent
+set_plot,'X'
+plotstuff,/set,/silent
 
-  ; GOAL:
-  ; - spinning globe w/ starspots & flares
-  ;   while simultaneously a real light curve is being generated
-  ; - do few versions with different spot configurations
-
-
-  stsp_prefix = 'polarspot'
-
-  ; flare rate is a number between 0-1. gives the acceptance rate for
-  ; randomly generating a new flare per frame
-  flare_rate = 0.2 ; set to 0 for NO flares
-
-  nframes = 360 ; use this also as the rotation period
-  extra_rot = 5 ; number of extra rotations to generate data over
-
-  incl = 12 ; stellar inclination
-  rot = 24 ; rotation (position) angle. no reason, just looks cool
-
-  Emin = 0.0005 ; min flare energy
-  Emax = 0.005 ; max flare energy
-
-  followspot = 1
-
-  ; make flares around the equator
-  eqband = 'no'
-  eqrange = 20. ; if "yes", this is the latitude band width
+; GOAL:
+; - spinning globe w/ starspots & flares
+;   while simultaneously a real light curve is being generated
+; - do few versions with different spot configurations
 
 
-  ; read the starspot VIZ outputs from STSP
-  readcol, stsp_prefix + '.in', inraw, f='(F)', /silent
-  if inraw[0] eq 0 then $ ; if no planets
-     nspots = inraw[8]
-  readcol, stsp_prefix + '_lcout.txt', time, flux, f='(F,X,X,F)', /silent
+stsp_prefix = 'polarspot'
 
-  flux_orig = flux ; might be useful later...
+; flare rate is a number between 0-1. gives the acceptance rate for
+; randomly generating a new flare per frame
+flare_rate = 0.15 ; set to 0 for NO flares
 
-  ; read the spot positions from the .in file
-  rad = inraw[n_elements(inraw) - (findgen(nspots)*3.+4.)]
-  lat = inraw[n_elements(inraw) - (findgen(nspots)*3.+3.)]/!dpi*180.-90.
-  lon = inraw[n_elements(inraw) - (findgen(nspots)*3.+2.)]/!dpi*180.
+nframes = 360 ; use this also as the rotation period
+extra_rot = 5 ; number of extra rotations to generate data over
 
-  ; hold the flare parameters:
-  ; [tpeak, fwhm, ampl, t_created, lon, lat]
-  flare_params = [-1, -1, -1, -1, -1, -1]
-  ; flares are tracked from -1 FWHM to 10 FWHM
-  fwhm_max = 10.
+incl = 12 ; stellar inclination
+rot = 24 ; rotation (position) angle. no reason, just looks cool
 
-  set_plot,'ps'
+Emin = 0.0005 ; min flare energy
+Emax = 0.005 ; max flare energy
 
-  FOR i=0l,nframes-1 DO BEGIN
-     device, filename='img/frame'+string(i,f='(I05)')+'.eps',$
-             /encap,/inch,/color,xsize=6,ysize=8
+followspot = 1
 
-     ; draw the globe
-     loadct,0, /silent
-     map_set, /satel, sat_p=[1d8,0,rot], incl, -i, /noborder, /grid, /horizon, $
+; make flares around the equator
+eqband = 'no'
+eqrange = 20. ; if "yes", this is the latitude band width
+
+
+; read the starspot VIZ outputs from STSP
+readcol, stsp_prefix + '.in', inraw, f='(F)', /silent
+if inraw[0] eq 0 then $ ; if no planets
+    nspots = inraw[8]
+readcol, stsp_prefix + '_lcout.txt', time_0, flux_0, f='(F,X,X,F)', /silent
+
+
+time = time_0
+for k=1,extra_rot do $
+    time = [time, time_0+max(time)]
+flux = flux_0
+for k=1,extra_rot do $
+    flux = [flux, flux_0]
+
+flux_orig = flux ; might be useful later...
+
+; read the spot positions from the .in file
+rad = inraw[n_elements(inraw) - (findgen(nspots)*3.+4.)]
+lat = inraw[n_elements(inraw) - (findgen(nspots)*3.+3.)]/!dpi*180.-90.
+lon = inraw[n_elements(inraw) - (findgen(nspots)*3.+2.)]/!dpi*180.
+
+; hold the flare parameters:
+; [tpeak, fwhm, ampl, t_created, lon, lat]
+flare_params = [-1, -1, -1, -1, -1, -1]
+; flares are tracked from -1 FWHM to 10 FWHM
+fwhm_max = 10.
+
+set_plot,'ps'
+FL_out = [-1]
+FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
+    if i LT nframes then begin
+        device, filename='img/frame'+string(i,f='(I05)')+'.eps',$
+            /encap,/inch,/color,xsize=6,ysize=8
+
+        ; draw the globe
+        loadct,0, /silent
+        map_set, /satel, sat_p=[1d8,0,rot], incl, -i, /noborder, /grid, /horizon, $
               xmarg=0, ymarg=0, glinethick=3, color=50, $
               position = posgen(1,4,1,ysp=3, xmin=0.02,xmax=0.98, $
                                 ymin=0.02,ymax=0.98)
+    endif
 
-     ; draw the spots
-     for k=0,nspots-1 do begin
-        drawcircle, lon[k], lat[k], rad[k], xxc, yyc
+    ; draw the spots
+    for k=0,nspots-1 do begin
+    drawcircle, lon[k], lat[k], rad[k], xxc, yyc
+    if i LT nframes then $
         polyfill, xxc, yyc, color=90
-     endfor
+    endfor
 
-     ; draw the flares
-     loadct, 39, /silent
+    ; draw the flares
+    loadct, 39, /silent
 
      ; should we make a new flare?
      new_fl_p = randomu(sss,1)
@@ -93,12 +104,6 @@ pro anim
             ;  - random latitudes on whole surface
             if eqband eq 'no' then $
                 flare_lat = randomu(sss,1) * 180. - 90.
-
-            ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
-            flare_params = [[flare_params], [ptmp]]
-
-            ; add the flare to the light curve
-            flux = flux + real(aflare(time, ptmp[0:2]),0)
         ENDIF
 
         ; FOR FOLLOWSPOT FLARES:
@@ -111,20 +116,22 @@ pro anim
             coord_tmp = flarecircle(lon[x], lat[x], rad[x], sss)
             flare_lon = coord_tmp[0]
             flare_lat = coord_tmp[1]
-
-            ; find great circle distance from center of star to flare
-            fdist = map_2points(-i, incl, flare_lon, flare_lat)
-
-            ; if flare not over the horizon, add it
-            if fdist[0] le 90 then begin
-                ;add the flare to the flare properties array
-                ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
-                flare_params = [[flare_params], [ptmp]]
-
-                ; then add the flare to the light curve
-                flux = flux + real(aflare(time, ptmp[0:2]),0)
-            endif
         ENDIF
+
+        ; find great circle distance from center of star to flare
+        fdist = map_2points(-i, incl, flare_lon, flare_lat)
+
+        ; if flare not over the horizon, add it
+        if fdist[0] le 90 then begin
+            ;add the flare to the flare properties array
+            ptmp = [i+fwhm, fwhm, ampl, i, flare_lon, flare_lat]
+            flare_params = [[flare_params], [ptmp]]
+
+            ; then add the flare to the light curve
+            flux = flux + real(aflare(time, ptmp[0:2]),0)
+            FL_out = [FL_out, i]
+        endif
+
      endif
 
 
@@ -140,65 +147,77 @@ pro anim
         flare_params = tmp
      endif
 
-     if (n_elements(flare_params)/6.) gt 1 then begin
-     ;oplot, flare_lon, flare_lat, psym=4, color=250
-        for k=1l,(n_elements(flare_params)/6.)-1 do begin
-           oplot, [flare_params[4,k]], [flare_params[5,k]], $
-                  psym=8, color=250, symsize=2.
-        endfor
+    if i LT nframes then begin
+         if (n_elements(flare_params)/6.) gt 1 then begin
+         ;oplot, flare_lon, flare_lat, psym=4, color=250
+            for k=1l,(n_elements(flare_params)/6.)-1 do begin
+               oplot, [flare_params[4,k]], [flare_params[5,k]], $
+                      psym=8, color=250, symsize=2.
+            endfor
 
-     endif
+         endif
 
-     ; draw the light curve
+        ; draw the light curve
+        yrng = [min(flux), max(flux)]
 
-     yrng = [min(flux), max(flux)]
+        plot, [time[0:i]], [flux[0:i]],xsty=9,ysty=9, $
+            position=posgen(1,4,4, xmin=0.1,xmax=0.95, ymin=0.05,ymax=0.7), /noerase,$
+            xtitle='Time', ytitle='Flux', charsize=0.8, xtickname=replicate(' ',8),$
+            xrange=[0,nframes], yrange=yrng
 
-     plot, [time[0:i]], [flux[0:i]],xsty=9,ysty=9, $
-           position=posgen(1,4,4, xmin=0.1,xmax=0.95, ymin=0.05,ymax=0.7), /noerase,$
-           xtitle='Time', ytitle='Flux', charsize=0.8, xtickname=replicate(' ',8),$
-           xrange=[0,nframes], yrange=yrng
-
-     device,/close
-     spawn,'convert -density 150x150 -flatten img/frame' + $
+        device,/close
+        spawn,'convert -density 150x150 -flatten img/frame' + $
            string(i,f='(I05)')+'.eps img/frame'+string(i,f='(I05)')+'.jpeg'
-     spawn, 'rm img/*.eps'
+        spawn, 'rm img/*.eps'
+    endif
 
   ENDFOR
 
-  set_plot,'X'
 
-  followspot_out = 'no'
-  if KEYWORD_SET(followspot) then $
-  followspot_out = 'yes'
+followspot_out = 'no'
+if KEYWORD_SET(followspot) then $
+followspot_out = 'yes'
 
-  ;-- generate a LOG FILE to save params used
-  openw, 1, stsp_prefix + '_animparams.txt'
-  printf, 1, 'Created on ' + systime()
-  printf, 1, '  using these parameters:'
+;-- generate a LOG FILE to save params used
+openw, 1, stsp_prefix + '_animparams.txt'
+printf, 1, 'Created on ' + systime()
+printf, 1, '  using these parameters:'
 
-  printf, 1, 'stsp_prefix = ' + string(stsp_prefix)
-  printf, 1, 'flare_rate = ' + string(flare_rate)
-  printf, 1, 'nframes = ' + string(nframes)
-  printf, 1, 'extra_rot = ' + string(extra_rot)
-  printf, 1, 'incl = ' + string(incl)
-  printf, 1, 'rot = ' + string(rot)
-  printf, 1, 'Emin = ' + string(Emin)
-  printf, 1, 'Emax = ' + string(Emax)
-  printf, 1, 'followspot = ' + string(followspot_out)
-  printf, 1, 'eqband = ' + string(eqband)
-  printf, 1, 'eqrange = ' + string(eqrange)
-  ; printf, 1, '' +
-  close, 1
+printf, 1, 'stsp_prefix = ' + string(stsp_prefix)
+printf, 1, 'flare_rate = ' + string(flare_rate)
+printf, 1, 'nframes = ' + string(nframes)
+printf, 1, 'extra_rot = ' + string(extra_rot)
+printf, 1, 'incl = ' + string(incl)
+printf, 1, 'rot = ' + string(rot)
+printf, 1, 'Emin = ' + string(Emin)
+printf, 1, 'Emax = ' + string(Emax)
+printf, 1, 'followspot = ' + string(followspot_out)
+printf, 1, 'eqband = ' + string(eqband)
+printf, 1, 'eqrange = ' + string(eqrange)
+; printf, 1, '' +
+close, 1
 
 
-  ; render movie
-  spawn,'ffmpeg -i img/frame%05d.jpeg -pix_fmt yuv420p -r 30 -qscale 1 ' + $
+; render movie
+spawn,'ffmpeg -i img/frame%05d.jpeg -pix_fmt yuv420p -r 30 -qscale 1 ' + $
     stsp_prefix + '.mp4'
 
+loadct,0,/silent
+
+; finally, produce phase-folded plot
+device,filename= stsp_prefix+'_phaseplot.eps',/encap,/color,/inch,xsize=5,ysize=9
+contour_plus, (time mod nframes)/nframes, flux, 1, position=posgen(1,2,2), $
+    xrange=[0,1], /xsty, /ysty, xtitle='Phase', ytitle='Flux', charsize=1,$
+    /pixel,/reverse, xbin=0.01, ybin=(max(flux)-min(flux))/100.
+plothist, (float(fl_out) mod nframes)/nframes,bin=0.05,/half, $
+    position=posgen(1,2,1),/noerase, xtickname=replicate(' ',8), $
+    xrange=[0,1], /xsty, ytitle='# Flares', charsize=1,thick=4
+device,/close
 
 
-  stop
-  return
+set_plot,'X'
+stop
+return
 end
 
 
