@@ -84,9 +84,10 @@ FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
 
     ; draw the spots
     for k=0,nspots-1 do begin
-    drawcircle, lon[k], lat[k], rad[k], xxc, yyc
-    if i LT nframes_max then $
-        polyfill, xxc, yyc, color=90
+        drawcircle, lon[k], lat[k], rad[k], xxc, yyc
+        if i LT nframes_max then $
+            polyfill, xxc, yyc, color=170
+        oplot, [xxc,xxc[0]], [yyc, yyc[0]], thick=2,color=50
     endfor
 
     ; draw the flares
@@ -161,8 +162,12 @@ FOR i=0l,nframes + (nframes * extra_rot)-1 DO BEGIN
          if (n_elements(flare_params)/6.) gt 1 then begin
          ;oplot, flare_lon, flare_lat, psym=4, color=250
             for k=1l,(n_elements(flare_params)/6.)-1 do begin
-               oplot, [flare_params[4,k]], [flare_params[5,k]], $
-                      psym=8, color=250, symsize=2.
+                loadct,0,/silent
+                oplot, [flare_params[4,k]], [flare_params[5,k]], $
+                     psym=8, symsize=2.4,color=50
+                loadct,39,/silent
+                oplot, [flare_params[4,k]], [flare_params[5,k]], $
+                     psym=8, color=225, symsize=2.
             endfor
 
          endif
